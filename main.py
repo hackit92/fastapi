@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from resend import Resend
+import resend
 
 # ---- Config ----
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -12,10 +12,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS: pon aquí tu dominio real de la landing
+# CORS: pon aquí tus dominios reales
 allowed_origins = [
     "http://localhost:3000",
-    "https://tu-landing-oficial.com"
+    "https://trendingtopic.mx",
+    "https://landing.trendingtopic.mx"
 ]
 
 app.add_middleware(
@@ -26,10 +27,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-resend_client = Resend(api_key=RESEND_API_KEY)
+# Configurar resend con la API key
+resend.api_key = RESEND_API_KEY
 
 
-# ------- Modelos de entrada/salida ---------
+# ------- Modelos ---------
 
 class ContactRequest(BaseModel):
     nombre: str
@@ -49,24 +51,25 @@ def health():
 @app.post("/contact", response_model=ContactResponse)
 def contact(data: ContactRequest):
     if not RESEND_API_KEY:
-        # Esto ayuda en debug si olvidaste setear la variable en Railway
-        raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured")
+        raise HTTPException(
+            status_code=500,
+            detail="RESEND_API_KEY not configured"
+        )
+
+    html_body = f"""
+    <h2>Nuevo contacto desde la landing</h2>
+    <p><strong>Nombre:</strong> {data.nombre}</p>
+    <p><strong>Email:</strong> {data.email}</p>
+    <p><strong>Mensaje:</strong></p>
+    <p>{data.mensaje or "(sin mensaje)"}</p>
+    <hr />
+    <p style="font-size:12px;color:#666;">
+      Este lead entró vía landing institucional TT.
+    </p>
+    """
 
     try:
-        # Armamos el HTML del correo
-        html_body = f"""
-        <h2>Nuevo contacto desde la landing</h2>
-        <p><strong>Nombre:</strong> {data.nombre}</p>
-        <p><strong>Email:</strong> {data.email}</p>
-        <p><strong>Mensaje:</strong></p>
-        <p>{data.mensaje or "(sin mensaje)"}</p>
-        <hr />
-        <p style="font-size:12px;color:#666;">
-          Este lead entró vía landing institucional TT.
-        </p>
-        """
-
-        resend_client.emails.send({
+        resend.Emails.send({
             "from": "Trending Topic <contact@trendingtopic.mx>",
             "to": ["informes@ttgroupmx.com"],
             "reply_to": data.email,
@@ -77,7 +80,6 @@ def contact(data: ContactRequest):
         return {"ok": True}
 
     except Exception as e:
-        # log server-side (Railway logs)
         print("Error enviando correo:", repr(e))
         raise HTTPException(
             status_code=500,
