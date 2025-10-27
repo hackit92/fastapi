@@ -9,10 +9,10 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 app = FastAPI(
     title="Trending Topic Contact API",
-    version="1.0.0",
+    version="1.1.0",
 )
 
-# CORS: pon aquí tus dominios reales
+# CORS
 allowed_origins = [
     "http://localhost:3000",
     "https://trendingtopic.mx",
@@ -27,23 +27,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configurar resend con la API key
+# Configurar resend
 resend.api_key = RESEND_API_KEY
 
 
 # ------- Modelos ---------
-
 class ContactRequest(BaseModel):
-    nombre: str
+    name: str
     email: EmailStr
-    mensaje: str | None = None
+    countryCode: str | None = None
+    phone: str | None = None
+    company: str | None = None
+    service: str | None = None
+    message: str
 
 class ContactResponse(BaseModel):
     ok: bool
 
 
 # ------- Rutas ---------
-
 @app.get("/health")
 def health():
     return {"ok": True, "service": "tt-contact-api-fastapi"}
@@ -51,17 +53,17 @@ def health():
 @app.post("/contact", response_model=ContactResponse)
 def contact(data: ContactRequest):
     if not RESEND_API_KEY:
-        raise HTTPException(
-            status_code=500,
-            detail="RESEND_API_KEY not configured"
-        )
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured")
 
     html_body = f"""
     <h2>Nuevo contacto desde la landing</h2>
-    <p><strong>Nombre:</strong> {data.nombre}</p>
+    <p><strong>Nombre:</strong> {data.name}</p>
     <p><strong>Email:</strong> {data.email}</p>
+    <p><strong>Teléfono:</strong> {data.countryCode or ''} {data.phone or ''}</p>
+    <p><strong>Empresa:</strong> {data.company or '(no especificada)'}</p>
+    <p><strong>Servicio de interés:</strong> {data.service or '(no especificado)'}</p>
     <p><strong>Mensaje:</strong></p>
-    <p>{data.mensaje or "(sin mensaje)"}</p>
+    <p>{data.message or '(sin mensaje)'}</p>
     <hr />
     <p style="font-size:12px;color:#666;">
       Este lead entró vía landing institucional TT.
@@ -81,7 +83,4 @@ def contact(data: ContactRequest):
 
     except Exception as e:
         print("Error enviando correo:", repr(e))
-        raise HTTPException(
-            status_code=500,
-            detail="No se pudo enviar el mensaje."
-        )
+        raise HTTPException(status_code=500, detail="No se pudo enviar el mensaje.")
